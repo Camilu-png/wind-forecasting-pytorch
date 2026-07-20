@@ -7,17 +7,19 @@ class WindPowerMLP(nn.Module):
     def __init__(
         self,
         input_dim: int,
-        hidden_dims: List[int] = None,
+        hidden_dims: Optional[List[int]] = None,
         activation: str = "relu",
         dropout: float = 0.2,
     ):
         super().__init__()
-        if hidden_dims is None:
-            hidden_dims = [128, 64, 32]
+        hidden_dims = hidden_dims or [128, 64, 32]
 
-        activation_fn = {"relu": nn.ReLU, "tanh": nn.Tanh, "gelu": nn.GELU}[activation]
+        activation_map = {"relu": nn.ReLU, "tanh": nn.Tanh, "gelu": nn.GELU}
+        if activation not in activation_map:
+            raise ValueError(f"Unknown activation '{activation}'. Choose from: {list(activation_map.keys())}")
+        activation_fn = activation_map[activation]
 
-        layers = []
+        layers: List[nn.Module] = []
         prev_dim = input_dim
         for h_dim in hidden_dims:
             layers.append(nn.Linear(prev_dim, h_dim))
@@ -75,14 +77,7 @@ class WindPowerLSTM(nn.Module):
         self._initialize_weights()
 
     def _initialize_weights(self) -> None:
-        for name, param in self.lstm.named_parameters():
-            if "weight_ih" in name:
-                nn.init.xavier_uniform_(param.data)
-            elif "weight_hh" in name:
-                nn.init.orthogonal_(param.data)
-            elif "bias" in name:
-                nn.init.zeros_(param.data)
-
+        self.lstm.reset_parameters()
         for module in self.regressor.modules():
             if isinstance(module, nn.Linear):
                 nn.init.xavier_uniform_(module.weight)

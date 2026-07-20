@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
-from typing import Tuple, Dict, Optional
+from typing import Tuple, Dict
 
 
 def set_seed(seed: int = 42) -> None:
@@ -28,6 +28,7 @@ def train_one_epoch(
 ) -> float:
     model.train()
     total_loss = 0.0
+    total_samples = 0
     for X_batch, y_batch in train_loader:
         X_batch, y_batch = X_batch.to(device), y_batch.to(device)
         optimizer.zero_grad()
@@ -35,8 +36,10 @@ def train_one_epoch(
         loss = criterion(predictions, y_batch)
         loss.backward()
         optimizer.step()
-        total_loss += loss.item() * X_batch.size(0)
-    return total_loss / len(train_loader.dataset)
+        batch_size = X_batch.size(0)
+        total_loss += loss.item() * batch_size
+        total_samples += batch_size
+    return total_loss / total_samples
 
 
 def validate(
@@ -47,13 +50,16 @@ def validate(
 ) -> float:
     model.eval()
     total_loss = 0.0
+    total_samples = 0
     with torch.no_grad():
         for X_batch, y_batch in val_loader:
             X_batch, y_batch = X_batch.to(device), y_batch.to(device)
             predictions = model(X_batch)
             loss = criterion(predictions, y_batch)
-            total_loss += loss.item() * X_batch.size(0)
-    return total_loss / len(val_loader.dataset)
+            batch_size = X_batch.size(0)
+            total_loss += loss.item() * batch_size
+            total_samples += batch_size
+    return total_loss / total_samples
 
 
 def train_model(

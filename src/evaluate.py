@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 import torch
 import torch.nn as nn
@@ -14,7 +15,11 @@ def compute_metrics(
     rmse = np.sqrt(np.mean((y_true - y_pred) ** 2))
     ss_res = np.sum((y_true - y_pred) ** 2)
     ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
-    r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    if ss_tot < 1e-12:
+        warnings.warn("R² is undefined: target values are nearly constant.")
+        r2 = float("nan")
+    else:
+        r2 = 1 - ss_res / ss_tot
     return {"MAE": mae, "RMSE": rmse, "R²": r2}
 
 
@@ -82,7 +87,7 @@ def plot_predictions(
     axes[1].plot(indices, y_pred[:n], label="Predicted", linewidth=1.0, alpha=0.8)
     axes[1].set_xlabel("Sample Index")
     axes[1].set_ylabel("Power")
-    axes[1].set_title(f"Time Series (first {n} test samples)")
+    axes[1].set_title(f"Predictions Over Test Samples (first {n})")
     axes[1].legend(fontsize=8)
     axes[1].grid(True, alpha=0.3)
 

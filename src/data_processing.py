@@ -3,7 +3,7 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
-from typing import Tuple, Optional, List
+from typing import Tuple, List
 
 
 RAW_FEATURES = [
@@ -133,11 +133,13 @@ class WindPowerLSTMDataset(Dataset):
         values: np.ndarray,
         targets: np.ndarray,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        X_seq, y_seq = [], []
-        for i in range(self.seq_len, len(values)):
-            X_seq.append(values[i - self.seq_len : i])
-            y_seq.append(targets[i])
-        return torch.from_numpy(np.array(X_seq)), torch.from_numpy(np.array(y_seq)).unsqueeze(1)
+        n = len(values) - self.seq_len
+        X_seq = np.zeros((n, self.seq_len, values.shape[1]), dtype=np.float32)
+        y_seq = np.zeros((n,), dtype=np.float32)
+        for i in range(n):
+            X_seq[i] = values[i : i + self.seq_len]
+            y_seq[i] = targets[i + self.seq_len]
+        return torch.from_numpy(X_seq), torch.from_numpy(y_seq).unsqueeze(1)
 
     def __len__(self) -> int:
         return len(self.X)
@@ -171,9 +173,9 @@ def prepare_dataloaders(
     seq_len: int = 24,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     if model_type == "mlp":
-        train_ds = WindPowerMLPDataset(train_df)
-        val_ds = WindPowerMLPDataset(val_df)
-        test_ds = WindPowerMLPDataset(test_df)
+        train_ds: Dataset = WindPowerMLPDataset(train_df)
+        val_ds: Dataset = WindPowerMLPDataset(val_df)
+        test_ds: Dataset = WindPowerMLPDataset(test_df)
     elif model_type == "lstm":
         train_ds = WindPowerLSTMDataset(train_df, seq_len=seq_len)
         val_ds = WindPowerLSTMDataset(val_df, seq_len=seq_len)
@@ -181,7 +183,8 @@ def prepare_dataloaders(
     else:
         raise ValueError(f"Unknown model_type: {model_type}")
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=False)
+    shuffle_train = model_type == "mlp"
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=shuffle_train)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
     return train_loader, val_loader, test_loader
@@ -207,14 +210,5 @@ def build_lstm_features(
     return df
 
 
-def get_normalization_cols(model_type: str) -> List[str]:
-    base_cols = ["temperature_2m", "relativehumidity_2m", "dewpoint_2m",
-                 "windspeed_10m", "windspeed_100m", "windgusts_10m",
-                 "winddirection_10m_sin", "winddirection_10m_cos",
-                 "winddirection_100m_sin", "winddirection_100m_cos",
-                 "hour_sin", "hour_cos", "dayofweek", "month_sin", "month_cos"]
-    if model_type == "mlp":
-        lag_cols = [f"{v}_lag_{l}" for v in ["windspeed_10m", "windspeed_100m", "windgusts_10m", TARGET_COL] for l in LAGS]
-        roll_cols = [f"{v}_roll_{s}_{w}" for v in ["windspeed_10m", "windspeed_100m", "windgusts_10m"] for w in ROLLING_WINDOWS for s in ["mean", "std"]]
-        return base_cols + lag_cols + roll_cols
-    return base_cols
+def exclude_cols() -> List[str]:
+    return ["Time", TARGET_COL]

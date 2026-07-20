@@ -1,16 +1,15 @@
 import os
+import pickle
 import argparse
 import torch
-import numpy as np
 import pandas as pd
-import torch
 from data_processing import (
     load_data,
     build_mlp_features,
     build_lstm_features,
     chronological_split,
     normalize_features,
-    get_normalization_cols,
+    exclude_cols,
     prepare_dataloaders,
 )
 from model import WindPowerMLP, WindPowerLSTM
@@ -40,10 +39,10 @@ def run_location(
 
     if model_type == "mlp":
         df = build_mlp_features(df)
-        feature_cols = get_normalization_cols("mlp")
     else:
         df = build_lstm_features(df)
-        feature_cols = get_normalization_cols("lstm")
+
+    feature_cols = [c for c in df.columns if c not in exclude_cols()]
 
     train_df, val_df, test_df = chronological_split(df)
 
@@ -73,6 +72,10 @@ def run_location(
 
     model_name = f"Location{location_id}_{model_type}"
     checkpoint_dir = os.path.join(output_dir, "trained_models")
+
+    scaler_path = os.path.join(checkpoint_dir, f"{model_name}_scaler.pkl")
+    with open(scaler_path, "wb") as f:
+        pickle.dump(scaler, f)
 
     train_losses, val_losses = train_model(
         model=model,
